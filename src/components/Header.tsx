@@ -7,6 +7,7 @@ interface HeaderProps {
   onNavigate: (screen: ScreenId) => void;
   onBack?: () => void;
   onOpenNotifications?: () => void;
+  onOpenQuickMenu?: () => void;
   onOpenNavigator?: () => void;
   isFramed?: boolean;
   onToggleFrame?: () => void;
@@ -16,6 +17,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentScreen,
   onNavigate,
   onBack,
+  onOpenNotifications,
+  onOpenQuickMenu,
   onOpenNavigator,
   isFramed,
   onToggleFrame,
