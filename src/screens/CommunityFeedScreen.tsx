@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ASSETS } from '../data/assets';
-import { ScreenId } from '../types';
+import { ScreenId, FeedPost } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface CommunityFeedScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -11,38 +12,79 @@ export const CommunityFeedScreen: React.FC<CommunityFeedScreenProps> = ({
   onNavigate,
   showToast,
 }) => {
+  const { user, feedPosts, createPost, likePost, commentPost, setAuthModalOpen } = useAuth();
   const [activeTab, setActiveTab] = useState<'all' | 'volunteer' | 'repair' | 'verified'>('all');
-  const [likes, setLikes] = useState<{ [key: string]: { count: number; liked: boolean } }>({
-    post1: { count: 28, liked: false },
-    post2: { count: 19, liked: false },
-    post3: { count: 42, liked: false },
-  });
-  const [isVolunteerRegistered, setIsVolunteerRegistered] = useState(false);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [newPostText, setNewPostText] = useState('');
+  const [isSubmittingPost, setIsSubmittingPost] = useState(false);
 
-  const toggleLike = (postId: string) => {
-    setLikes((prev) => {
-      const current = prev[postId];
-      const liked = !current.liked;
-      const count = liked ? current.count + 1 : current.count - 1;
-      showToast(liked ? 'Marked as helpful' : 'Unmarked', 'thumb_up');
-      return { ...prev, [postId]: { count, liked } };
-    });
+  // Comment Drawer state
+  const [activeCommentPost, setActiveCommentPost] = useState<FeedPost | null>(null);
+  const [commentInput, setCommentInput] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  const handleToggleLike = async (postId: string) => {
+    if (!user) {
+      setAuthModalOpen(true);
+      showToast('Sign in to endorse and like community field reports', 'info');
+      return;
+    }
+    try {
+      await likePost(postId);
+      showToast('Updated helpful endorsement', 'thumb_up');
+    } catch (err: any) {
+      showToast(err.message || 'Failed liking post', 'error');
+    }
   };
 
-  const handleRegisterCrew = () => {
-    setIsVolunteerRegistered(!isVolunteerRegistered);
-    showToast(
-      isVolunteerRegistered
-        ? 'Shift registration cancelled'
-        : 'Registered for Benoa Port crew shift!',
-      isVolunteerRegistered ? 'info' : 'task_alt'
-    );
+  const handleCreatePost = async () => {
+    if (!user) {
+      setAuthModalOpen(true);
+      showToast('Sign in or register to publish community updates', 'info');
+      return;
+    }
+    if (!newPostText.trim()) return;
+
+    setIsSubmittingPost(true);
+    try {
+      await createPost(newPostText.trim(), ASSETS.fishermenRepairing, user.location);
+      setIsComposerOpen(false);
+      setNewPostText('');
+      showToast('Field update published to live community feed!', 'task_alt');
+    } catch (err: any) {
+      showToast(err.message || 'Failed publishing update', 'error');
+    } finally {
+      setIsSubmittingPost(false);
+    }
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      setAuthModalOpen(true);
+      showToast('Sign in to comment on community posts', 'info');
+      return;
+    }
+    if (!activeCommentPost || !commentInput.trim()) return;
+
+    setIsSubmittingComment(true);
+    try {
+      await commentPost(activeCommentPost.id, commentInput.trim());
+      setCommentInput('');
+      showToast('Comment added!', 'chat');
+      // Update local active post reference
+      const updated = feedPosts.find((p) => p.id === activeCommentPost.id);
+      if (updated) setActiveCommentPost(updated);
+    } catch (err: any) {
+      showToast(err.message || 'Failed submitting comment', 'error');
+    } finally {
+      setIsSubmittingComment(false);
+    }
   };
 
   const handleShare = () => {
-    showToast('Link copied to clipboard!', 'share');
+    navigator.clipboard?.writeText?.(window.location.href);
+    showToast('Feed link copied to clipboard!', 'share');
   };
 
   return (
@@ -59,388 +101,165 @@ export const CommunityFeedScreen: React.FC<CommunityFeedScreenProps> = ({
             </span>
             <span className="material-symbols-outlined text-xs opacity-60">info</span>
           </div>
-          <p className="text-xs text-[#a6ccdf] mt-0.5 leading-snug">
-            Respectful, collaborative marine action. Never post sensitive wildlife coordinates or
-            unverified claims.
+          <p className="text-xs text-[#dce3eb] mt-1 leading-relaxed">
+            All posts are tagged with GPS harbor stamps to coordinate ghost gear retrieval and avoid duplicate dives.
           </p>
         </div>
       </div>
 
-      {/* Quick Action & Post Trigger */}
-      <div className="bg-white rounded-3xl p-3 shadow-sm border border-[#e8eff7] flex items-center gap-2.5">
-        <div className="w-10 h-10 rounded-2xl bg-[#e8eff7] flex items-center justify-center text-[#006a63] shrink-0">
-          <span className="material-symbols-outlined text-xl">edit_note</span>
-        </div>
+      {/* Composer Trigger Bar */}
+      <div className="bg-white rounded-3xl p-3 shadow-sm border border-[#e8eff7] flex items-center gap-3">
+        <img
+          src={user?.avatar || ASSETS.userProfile}
+          alt={user?.name || 'Steward'}
+          className="w-10 h-10 rounded-full object-cover ring-2 ring-[#006a63]/40 bg-[#eef4fc]"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = ASSETS.userProfile;
+          }}
+        />
         <button
-          onClick={() => setIsComposerOpen(true)}
-          className="flex-1 text-left bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-medium py-2.5 px-4 rounded-full transition-colors truncate border border-[#e8eff7]"
+          onClick={() => {
+            if (!user) {
+              setAuthModalOpen(true);
+            } else {
+              setIsComposerOpen(true);
+            }
+          }}
+          className="flex-1 text-left bg-[#f6faff] hover:bg-[#eef4fc] text-[#72787c] text-xs font-semibold py-2.5 px-4 rounded-full border border-[#dce3eb] transition-colors"
         >
-          Share an update, request volunteers, or report gear...
+          {user ? `What did you salvage today, ${user.name.split(' ')[0]}?` : 'Sign in to share a field report...'}
         </button>
         <button
           onClick={() => {
-            setIsComposerOpen(true);
-            showToast('Ready to attach camera photo', 'add_a_photo');
+            if (!user) setAuthModalOpen(true);
+            else setIsComposerOpen(true);
           }}
-          className="w-10 h-10 rounded-full bg-[#e8eff7] hover:bg-[#dce3eb] flex items-center justify-center text-[#002531] shrink-0"
-          title="Attach Field Photo"
+          className="w-10 h-10 rounded-full bg-[#006a63] text-white flex items-center justify-center shadow-xs hover:bg-[#00504a] active:scale-95 transition-all"
+          title="Create Update"
         >
-          <span className="material-symbols-outlined text-lg">add_a_photo</span>
+          <span className="material-symbols-outlined text-xl">edit</span>
         </button>
       </div>
 
-      {/* Filter Category Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-            activeTab === 'all'
-              ? 'bg-[#006a63] text-white shadow-xs'
-              : 'bg-[#e8eff7] text-[#41484b] hover:bg-[#dce3eb]'
-          }`}
-        >
-          All Updates
-        </button>
-        <button
-          onClick={() => setActiveTab('volunteer')}
-          className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-            activeTab === 'volunteer'
-              ? 'bg-[#006a63] text-white shadow-xs'
-              : 'bg-[#e8eff7] text-[#41484b] hover:bg-[#dce3eb]'
-          }`}
-        >
-          Volunteer Requests
-        </button>
-        <button
-          onClick={() => setActiveTab('repair')}
-          className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-            activeTab === 'repair'
-              ? 'bg-[#006a63] text-white shadow-xs'
-              : 'bg-[#e8eff7] text-[#41484b] hover:bg-[#dce3eb]'
-          }`}
-        >
-          Repair & Repurposing
-        </button>
-        <button
-          onClick={() => setActiveTab('verified')}
-          className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-            activeTab === 'verified'
-              ? 'bg-[#006a63] text-white shadow-xs'
-              : 'bg-[#e8eff7] text-[#41484b] hover:bg-[#dce3eb]'
-          }`}
-        >
-          Verified Outcomes
-        </button>
+      {/* Category Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+        {[
+          { id: 'all', label: 'All Updates' },
+          { id: 'volunteer', label: 'Volunteer Requests' },
+          { id: 'repair', label: 'Repair & Repurposing' },
+          { id: 'verified', label: 'Verified Outcomes' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+              activeTab === tab.id
+                ? 'bg-[#006a63] text-white shadow-xs'
+                : 'bg-[#e8eff7] text-[#41484b] hover:bg-[#dce3eb]'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Feed Container */}
       <div className="space-y-4">
-        {/* POST 1: Repair Milestone (Budi Santoso) */}
-        {(activeTab === 'all' || activeTab === 'repair') && (
-          <article className="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-[#e8eff7] flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                  <div className="w-11 h-11 rounded-full bg-[#123b4a] text-white flex items-center justify-center text-xs font-bold">
-                    BS
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 bg-[#90f4e9] text-[#00201d] rounded-full p-0.5 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[12px] font-bold">anchor</span>
-                  </div>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-[#151c22] truncate">Budi Santoso</span>
-                    <span className="material-symbols-outlined text-[#006a63] text-sm">verified</span>
-                  </div>
-                  <span className="text-[11px] text-[#41484b] truncate">
-                    Serangan Fishermen Cooperative Lead
-                  </span>
-                  <span className="text-[10px] text-[#72787c]">2h ago • Serangan Depot, Bali</span>
-                </div>
-              </div>
-              <button
-                onClick={() => showToast('Flagged for marine community review', 'flag')}
-                className="text-[#72787c] hover:text-[#ba1a1a] p-1 rounded-full"
-                title="Flag"
+        {feedPosts.length === 0 ? (
+          <div className="bg-white rounded-3xl p-8 text-center border border-[#e8eff7]">
+            <span className="material-symbols-outlined text-4xl text-[#72787c] mb-2">forum</span>
+            <p className="text-sm font-bold text-[#151c22]">No field reports yet</p>
+            <p className="text-xs text-[#41484b] mt-1">Be the first steward to post an update!</p>
+          </div>
+        ) : (
+          feedPosts.map((post) => {
+            const isLikedByUser = Boolean(user && post.likedBy?.includes(user.id));
+            return (
+              <article
+                key={post.id}
+                className="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-[#e8eff7] flex flex-col gap-3"
               >
-                <span className="material-symbols-outlined text-lg">flag</span>
-              </button>
-            </div>
-
-            <div>
-              <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#90f4e9]/50 text-[#00504a]">
-                <span className="material-symbols-outlined text-xs">build_circle</span>
-                <span>#RepairBeforeReplace</span>
-              </span>
-            </div>
-
-            <p className="text-xs sm:text-sm text-[#151c22] leading-relaxed">
-              Completed our weekend net mending session with 14 local fishers. Instead of discarding
-              damaged trammel nets, we reinforced 240 meters with recycled twine provided by
-              TIDEKIND depot.
-            </p>
-
-            <div className="rounded-2xl overflow-hidden bg-[#002531] relative h-48">
-              <img
-                src={ASSETS.fishermenRepairing}
-                alt="Fishermen repairing nets"
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-2 left-2 bg-[#002531]/80 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-1 text-white text-xs font-semibold">
-                <span className="material-symbols-outlined text-xs text-[#90f4e9]">straighten</span>
-                <span>240m Restored</span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-1 flex items-center justify-between border-t border-[#e8eff7]">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleLike('post1')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    likes.post1.liked
-                      ? 'bg-[#90f4e9] text-[#00504a]'
-                      : 'bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">thumb_up</span>
-                  <span>{likes.post1.count} Helpful</span>
-                </button>
-                <button
-                  onClick={() => showToast('Viewing 6 comments from Serangan stewards', 'comment')}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold"
-                >
-                  <span className="material-symbols-outlined text-base">mode_comment</span>
-                  <span>6</span>
-                </button>
-              </div>
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold"
-              >
-                <span className="material-symbols-outlined text-base">share</span>
-                <span>Share</span>
-              </button>
-            </div>
-          </article>
-        )}
-
-        {/* POST 2: Volunteer Opportunity (Sarah Jenkins) */}
-        {(activeTab === 'all' || activeTab === 'volunteer') && (
-          <article className="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-[#e8eff7] flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                  <div className="w-11 h-11 rounded-full bg-[#006a63] text-white flex items-center justify-center text-xs font-bold">
-                    SJ
+                {/* Author Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={post.authorAvatar || ASSETS.userProfile}
+                      alt={post.authorName}
+                      className="w-11 h-11 rounded-full object-cover ring-2 ring-[#006a63]/30 bg-[#eef4fc] shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = ASSETS.userProfile;
+                      }}
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-[#151c22] truncate">{post.authorName}</span>
+                        <span className="material-symbols-outlined text-[#006a63] text-sm">verified</span>
+                      </div>
+                      <span className="text-[11px] text-[#41484b] truncate">{post.authorRole}</span>
+                      <span className="text-[10px] text-[#72787c]">
+                        {post.timeAgo} • {post.location}
+                      </span>
+                    </div>
                   </div>
-                  <div className="absolute -bottom-1 -right-1 bg-[#ffdbd1] text-[#460b00] rounded-full p-0.5 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[12px] font-bold">campaign</span>
-                  </div>
+
+                  <button
+                    onClick={() => showToast('Flagged for marine community review', 'flag')}
+                    className="text-[#72787c] hover:text-[#ba1a1a] p-1 rounded-full"
+                    title="Flag"
+                  >
+                    <span className="material-symbols-outlined text-lg">flag</span>
+                  </button>
                 </div>
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-[#151c22] truncate">Sarah Jenkins</span>
-                    <span className="material-symbols-outlined text-[#006a63] text-sm">handshake</span>
+
+                {/* Content */}
+                <p className="text-xs sm:text-sm text-[#151c22] leading-relaxed whitespace-pre-line">
+                  {post.content}
+                </p>
+
+                {/* Optional Media */}
+                {post.imageUrl && (
+                  <div className="rounded-2xl overflow-hidden bg-[#002531] relative h-48">
+                    <img src={post.imageUrl} alt="Field post attachment" className="w-full h-full object-cover" />
                   </div>
-                  <span className="text-[11px] text-[#41484b] truncate">
-                    Ocean Action Bali Coordinator
-                  </span>
-                  <span className="text-[10px] text-[#72787c]">5h ago • Benoa Port Hub</span>
+                )}
+
+                {/* Actions */}
+                <div className="pt-1 flex items-center justify-between border-t border-[#e8eff7]">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggleLike(post.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                        isLikedByUser
+                          ? 'bg-[#90f4e9] text-[#00504a] shadow-xs'
+                          : 'bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b]'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        {isLikedByUser ? 'thumb_up' : 'thumb_up_off_alt'}
+                      </span>
+                      <span>{post.likesCount || 0} Helpful</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveCommentPost(post)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-base">mode_comment</span>
+                      <span>{post.comments?.length || 0}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={handleShare}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold"
+                  >
+                    <span className="material-symbols-outlined text-base">share</span>
+                    <span>Share</span>
+                  </button>
                 </div>
-              </div>
-              <button
-                onClick={() => showToast('Flagged for marine review', 'flag')}
-                className="text-[#72787c] hover:text-[#ba1a1a] p-1 rounded-full"
-              >
-                <span className="material-symbols-outlined text-lg">flag</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#ffdbd1] text-[#460b00]">
-                #VolunteerOpportunity
-              </span>
-              <span className="px-3 py-0.5 rounded-full text-[11px] font-semibold bg-[#e8eff7] text-[#002531]">
-                This Thursday, 08:30 WITA
-              </span>
-            </div>
-
-            <p className="text-xs sm:text-sm text-[#151c22] leading-relaxed">
-              Seeking 5 volunteers this Thursday at Benoa Port to assist with weighing, tagging, and
-              baling nylon trawl nets before shipment to recycling facility. Gloves and safety boots
-              provided.
-            </p>
-
-            {/* Crew Capacity Box */}
-            <div className="bg-[#eef4fc] rounded-2xl p-4 flex flex-col gap-2.5 border border-[#dce3eb]">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[#41484b] font-medium">Crew Capacity</span>
-                <span className="font-bold text-[#006a63]">
-                  {isVolunteerRegistered ? '4/5 spots filled' : '3/5 spots filled'}
-                </span>
-              </div>
-              <div className="w-full bg-[#dce3eb] rounded-full h-2.5 overflow-hidden flex">
-                <div
-                  className="bg-[#006a63] h-full rounded-full transition-all duration-300"
-                  style={{ width: isVolunteerRegistered ? '80%' : '60%' }}
-                ></div>
-              </div>
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex -space-x-2 overflow-hidden">
-                  <div className="w-6 h-6 rounded-full bg-[#002531] text-white text-[10px] flex items-center justify-center font-bold">
-                    RA
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-[#90f4e9] text-[#00201d] text-[10px] flex items-center justify-center font-bold">
-                    WT
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-[#ffdbd1] text-[#460b00] text-[10px] flex items-center justify-center font-bold">
-                    LK
-                  </div>
-                </div>
-                <span className="text-xs text-[#41484b]">
-                  {isVolunteerRegistered ? '1 berth open' : '2 berths open'}
-                </span>
-              </div>
-
-              <button
-                onClick={handleRegisterCrew}
-                className={`w-full mt-1 py-3 rounded-full text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all ${
-                  isVolunteerRegistered
-                    ? 'bg-[#90f4e9] text-[#00201d]'
-                    : 'bg-[#006a63] hover:bg-[#123b4a] text-white'
-                }`}
-              >
-                <span className="material-symbols-outlined text-base">
-                  {isVolunteerRegistered ? 'check' : 'person_add'}
-                </span>
-                <span>{isVolunteerRegistered ? 'Registered for Shift' : 'Register to Help'}</span>
-              </button>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-1 flex items-center justify-between border-t border-[#e8eff7]">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleLike('post2')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    likes.post2.liked
-                      ? 'bg-[#90f4e9] text-[#00504a]'
-                      : 'bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">thumb_up</span>
-                  <span>{likes.post2.count} Helpful</span>
-                </button>
-                <button
-                  onClick={() => showToast('Opening comments...', 'comment')}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold"
-                >
-                  <span className="material-symbols-outlined text-base">mode_comment</span>
-                  <span>4</span>
-                </button>
-              </div>
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold"
-              >
-                <span className="material-symbols-outlined text-base">share</span>
-                <span>Share</span>
-              </button>
-            </div>
-          </article>
-        )}
-
-        {/* POST 3: Circular Recycling Milestone (PT Daur Samudera) */}
-        {(activeTab === 'all' || activeTab === 'verified') && (
-          <article className="bg-white rounded-3xl p-4 sm:p-5 shadow-sm border border-[#e8eff7] flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                  <div className="w-11 h-11 rounded-full bg-[#002531] text-white flex items-center justify-center text-xs font-bold">
-                    DS
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 bg-[#006a63] text-white rounded-full p-0.5 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[12px] font-bold">recycling</span>
-                  </div>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-[#151c22] truncate">PT Daur Samudera</span>
-                    <span className="material-symbols-outlined text-[#006a63] text-sm">verified</span>
-                  </div>
-                  <span className="text-[11px] text-[#41484b] truncate">
-                    Recycling Partner • Industrial Tier
-                  </span>
-                  <span className="text-[10px] text-[#72787c]">1d ago • Sidoarjo Facility</span>
-                </div>
-              </div>
-              <button
-                onClick={() => showToast('Flagged for review', 'flag')}
-                className="text-[#72787c] hover:text-[#ba1a1a] p-1 rounded-full"
-              >
-                <span className="material-symbols-outlined text-lg">flag</span>
-              </button>
-            </div>
-
-            <div>
-              <span className="px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#90f4e9] text-[#00504a]">
-                #MaterialCircularity
-              </span>
-            </div>
-
-            <p className="text-xs sm:text-sm text-[#151c22] leading-relaxed">
-              First batch of 450kg marine nylon from the Kuta pilot successfully cleaned and chipped
-              for pellet extrusion test! Traceability batch certificate #ID-KT-088 verified.
-            </p>
-
-            {/* Reclaimed Polymer Stat Card */}
-            <div className="bg-[#eef4fc] rounded-2xl p-4 flex items-center justify-between border border-[#dce3eb]">
-              <div className="flex flex-col">
-                <span className="text-[11px] text-[#72787c] font-semibold">Reclaimed Polymer</span>
-                <span className="text-xl font-bold text-[#002531]">450 kg Net Mass</span>
-                <span className="text-xs font-bold text-[#006a63] flex items-center gap-1 mt-0.5">
-                  <span className="material-symbols-outlined text-sm">check_circle</span>
-                  <span>Extrusion Ready</span>
-                </span>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-[#90f4e9]/30 flex items-center justify-center text-[#006a63]">
-                <span className="material-symbols-outlined text-2xl">token</span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-1 flex items-center justify-between border-t border-[#e8eff7]">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleLike('post3')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    likes.post3.liked
-                      ? 'bg-[#90f4e9] text-[#00504a]'
-                      : 'bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">thumb_up</span>
-                  <span>{likes.post3.count} Helpful</span>
-                </button>
-                <button
-                  onClick={() => showToast('Opening comments...', 'comment')}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold"
-                >
-                  <span className="material-symbols-outlined text-base">mode_comment</span>
-                  <span>8</span>
-                </button>
-              </div>
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#f6faff] hover:bg-[#eef4fc] text-[#41484b] text-xs font-semibold"
-              >
-                <span className="material-symbols-outlined text-base">share</span>
-                <span>Share</span>
-              </button>
-            </div>
-          </article>
+              </article>
+            );
+          })
         )}
       </div>
 
@@ -449,7 +268,10 @@ export const CommunityFeedScreen: React.FC<CommunityFeedScreenProps> = ({
         <div className="fixed inset-0 z-50 bg-[#002531]/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl space-y-3">
             <div className="flex items-center justify-between border-b pb-2 border-[#e8eff7]">
-              <h3 className="text-base font-bold text-[#151c22]">Share Field Update</h3>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#006a63]">campaign</span>
+                <h3 className="text-base font-bold text-[#151c22]">Share Field Update</h3>
+              </div>
               <button
                 onClick={() => setIsComposerOpen(false)}
                 className="w-8 h-8 rounded-full bg-[#e8eff7] flex items-center justify-center text-[#41484b]"
@@ -470,34 +292,91 @@ export const CommunityFeedScreen: React.FC<CommunityFeedScreenProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => showToast('Attached marine camera snapshot', 'photo_camera')}
+                  onClick={() => showToast('Attached net repair photo', 'photo_camera')}
                   className="px-3 py-1.5 rounded-full bg-[#e8eff7] text-[#002531] text-xs font-semibold flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-base">photo_camera</span>
                   <span>Photo</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => showToast('Location pinned to Sanur Port', 'location_on')}
-                  className="px-3 py-1.5 rounded-full bg-[#e8eff7] text-[#002531] text-xs font-semibold flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-base">location_on</span>
-                  <span>Port Hub</span>
-                </button>
+                <span className="text-[11px] text-[#72787c]">Posting as {user?.name}</span>
               </div>
 
               <button
                 type="button"
-                onClick={() => {
-                  setIsComposerOpen(false);
-                  setNewPostText('');
-                  showToast('Field update posted to community feed!', 'task_alt');
-                }}
-                className="px-5 py-2.5 rounded-full bg-[#006a63] text-white text-xs font-bold active:scale-95 transition-all"
+                disabled={isSubmittingPost || !newPostText.trim()}
+                onClick={handleCreatePost}
+                className="px-5 py-2.5 rounded-full bg-[#006a63] text-white text-xs font-bold active:scale-95 transition-all disabled:opacity-50"
               >
-                Post Update
+                {isSubmittingPost ? 'Posting...' : 'Post Update'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comments Drawer / Modal */}
+      {activeCommentPost && (
+        <div className="fixed inset-0 z-50 bg-[#002531]/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl space-y-3 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between border-b pb-2 border-[#e8eff7]">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#006a63]">mode_comment</span>
+                <h3 className="text-sm font-bold text-[#151c22]">
+                  Comments ({activeCommentPost.comments?.length || 0})
+                </h3>
+              </div>
+              <button
+                onClick={() => setActiveCommentPost(null)}
+                className="w-8 h-8 rounded-full bg-[#e8eff7] flex items-center justify-center text-[#41484b]"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            {/* Comment List */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 no-scrollbar">
+              {activeCommentPost.comments && activeCommentPost.comments.length > 0 ? (
+                activeCommentPost.comments.map((c) => (
+                  <div key={c.id} className="p-3 rounded-2xl bg-[#f6faff] border border-[#e8eff7] flex gap-2.5">
+                    <img
+                      src={c.authorAvatar || ASSETS.userProfile}
+                      alt={c.authorName}
+                      className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#151c22]">{c.authorName}</span>
+                        <span className="text-[10px] text-[#72787c]">{c.createdAt}</span>
+                      </div>
+                      <p className="text-xs text-[#41484b] mt-0.5">{c.text}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-[#72787c] text-center py-6">
+                  No comments on this field report yet. Share your feedback below!
+                </p>
+              )}
+            </div>
+
+            {/* Submit Comment Form */}
+            <form onSubmit={handleAddComment} className="pt-2 flex gap-2 border-t border-[#e8eff7]">
+              <input
+                type="text"
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                placeholder={user ? `Reply as ${user.name}...` : 'Sign in to comment...'}
+                disabled={!user}
+                className="flex-1 h-10 px-3 rounded-full bg-[#f6faff] text-xs border border-[#dce3eb] outline-none"
+              />
+              <button
+                type="submit"
+                disabled={isSubmittingComment || !commentInput.trim() || !user}
+                className="px-4 h-10 rounded-full bg-[#006a63] text-white text-xs font-bold active:scale-95 disabled:opacity-50"
+              >
+                {isSubmittingComment ? 'Sending...' : 'Send'}
+              </button>
+            </form>
           </div>
         </div>
       )}

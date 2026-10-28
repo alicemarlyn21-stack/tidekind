@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ASSETS } from '../data/assets';
 import { ScreenId } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   currentScreen: ScreenId;
@@ -23,6 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
   isFramed,
   onToggleFrame,
 }) => {
+  const { user, setAuthModalOpen } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
 
   const getScreenTitle = (screen: ScreenId): string => {
@@ -125,23 +127,35 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#f08b70]"></span>
             </button>
 
-            {/* User Profile Avatar */}
-            <button
-              type="button"
-              onClick={() => onNavigate('profile')}
-              aria-label="Alex Steward Profile"
-              className="w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-[#006a63]/70 hover:ring-[#90f4e9] transition-all overflow-hidden ml-0.5 active:scale-95"
-              title="Alex Steward Profile"
-            >
-              <img
-                src={ASSETS.alexSteward}
-                alt="Alex Steward"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = ASSETS.userProfile;
-                }}
-              />
-            </button>
+            {/* Real-time Indicator & User Profile Avatar */}
+            {user ? (
+              <button
+                type="button"
+                onClick={() => onNavigate('profile')}
+                aria-label={`${user.name} Profile`}
+                className="w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-[#006a63]/70 hover:ring-[#90f4e9] transition-all overflow-hidden ml-0.5 active:scale-95"
+                title={`${user.name} (${user.badge || 'Steward'})`}
+              >
+                <img
+                  src={user.avatar || ASSETS.userProfile}
+                  alt={user.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = ASSETS.userProfile;
+                  }}
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAuthModalOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#90f4e9] text-[#00201d] hover:bg-[#73d7cd] active:scale-95 transition-all shadow-xs"
+                title="Sign in or register"
+              >
+                <span className="material-symbols-outlined text-[15px]">login</span>
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         </div>
       </header>

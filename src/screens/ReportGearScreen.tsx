@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ASSETS } from '../data/assets';
 import { ScreenId } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ReportGearScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -13,12 +14,22 @@ export const ReportGearScreen: React.FC<ReportGearScreenProps> = ({
   showToast,
   onAddReport,
 }) => {
+  const { user } = useAuth();
   const [gearType, setGearType] = useState('Net (Gillnet / Trammel)');
   const [condition, setCondition] = useState<'snagged' | 'stranded' | 'floating'>('snagged');
   const [coords, setCoords] = useState('-8.689, 115.263');
   const [landmark, setLandmark] = useState('Sanur Harbor, 420m ESE of Marine Channel Marker 4');
   const [obsDate, setObsDate] = useState('2025-05-18');
   const [obsTime, setObsTime] = useState('09:45');
+  const [observerName, setObserverName] = useState(user?.name || 'Alex Steward');
+  const [observerEmail, setObserverEmail] = useState(user?.email || 'alex@tidekind.org');
+
+  useEffect(() => {
+    if (user) {
+      setObserverName(user.name);
+      setObserverEmail(user.email);
+    }
+  }, [user]);
   const [isUrgentThreat, setIsUrgentThreat] = useState(true);
   const [notes, setNotes] = useState(
     'Dense mesh net wrapping approximately 6 meters across an active hard coral head. Moderate tidal surge present. Several small reef fish trapped, juvenile green sea turtle sighted feeding within 15 meters.'
@@ -493,7 +504,8 @@ export const ReportGearScreen: React.FC<ReportGearScreenProps> = ({
             <div>
               <label className="text-[11px] font-bold text-[#72787c] block mb-1">Contact Name</label>
               <input
-                defaultValue="Alex Steward"
+                value={observerName}
+                onChange={(e) => setObserverName(e.target.value)}
                 className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-semibold text-[#151c22] border border-[#dce3eb] focus:outline-none"
                 type="text"
               />
@@ -501,7 +513,8 @@ export const ReportGearScreen: React.FC<ReportGearScreenProps> = ({
             <div>
               <label className="text-[11px] font-bold text-[#72787c] block mb-1">Email</label>
               <input
-                defaultValue="alex@tidekind.org"
+                value={observerEmail}
+                onChange={(e) => setObserverEmail(e.target.value)}
                 className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-semibold text-[#151c22] border border-[#dce3eb] focus:outline-none"
                 type="email"
               />

@@ -5,12 +5,13 @@
 
 import React, { useState } from 'react';
 import { ScreenId, ToastMessage, GearReport } from './types';
-import { INITIAL_REPORTS } from './data/mockData';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Toast } from './components/Toast';
 import { QuickNavigatorModal } from './components/QuickNavigatorModal';
 import { NotificationsModal } from './components/NotificationsModal';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './components/AuthModal';
 
 // Screens
 import { WelcomeScreen } from './screens/WelcomeScreen';
@@ -25,8 +26,10 @@ import { CommunityFeedScreen } from './screens/CommunityFeedScreen';
 import { RecyclingScreen } from './screens/RecyclingScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { NavigatorScreen } from './screens/NavigatorScreen';
+import { api } from './services/api';
 
-export default function App() {
+function AppContent() {
+  const { user, reports, addReport, isRealtimeConnected, setAuthModalOpen } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('home');
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [isQuickNavigatorOpen, setIsQuickNavigatorOpen] = useState(false);
@@ -35,7 +38,6 @@ export default function App() {
 
   // Shared persistent state across screens
   const [isRegisteredKuta, setIsRegisteredKuta] = useState(false);
-  const [reportsList, setReportsList] = useState<GearReport[]>(INITIAL_REPORTS);
 
   const showToast = (message: string, icon: string = 'check_circle', type: 'success' | 'info' | 'warning' | 'error' = 'success') => {
     const id = Date.now().toString();
@@ -45,35 +47,54 @@ export default function App() {
     }, 2800);
   };
 
-  const handleDispatchShoreScanToReports = (sampleKey: string, notes: string, category: string) => {
-    const newReport: GearReport = {
-      id: `SS-2025-0${Math.floor(43 + Math.random() * 50)}`,
-      gearType:
-        category === 'net_hdpe'
-          ? 'Polypropylene Netting'
-          : category === 'rope_reef'
-          ? 'Tangled Synthetic Rope'
-          : category === 'buoy_rig'
-          ? 'Drifting Buoy Line'
-          : 'Marine Debris Segment',
-      condition: 'Submerged & Snagged',
-      locationName: 'Sanur Outer Reef • Sector 3',
-      coords: '8.7052° S, 115.2625° E',
-      date: 'Today',
-      time: '10:14 WITA',
-      notes,
-      threatLevel: 'Moderate Dragging Risk',
-      hasWildlifeEntanglement: false,
-      status: 'Under Review',
-      submittedAt: 'Just now',
-      confidence: '91.4% Edge Conf',
-      assignedTeam: 'ShoreScan Automated Quorum (2 of 3 signed)',
-    };
-    setReportsList((prev) => [newReport, ...prev]);
+  const handleDispatchShoreScanToReports = async (sampleKey: string, notes: string, category: string) => {
+    try {
+      const newReportData: Partial<GearReport> = {
+        gearType:
+          category === 'net_hdpe'
+            ? 'Polypropylene Netting'
+            : category === 'rope_reef'
+            ? 'Tangled Synthetic Rope'
+            : category === 'buoy_rig'
+            ? 'Drifting Buoy Line'
+            : 'Marine Debris Segment',
+        condition: 'Submerged & Snagged',
+        locationName: 'Sanur Outer Reef • Sector 3',
+        coords: '8.7052° S, 115.2625° E',
+        date: 'Today',
+        notes,
+        threatLevel: 'Moderate Dragging Risk',
+        hasWildlifeEntanglement: false,
+        status: 'Under Review',
+        confidence: '91.4% Edge Conf',
+        assignedTeam: 'ShoreScan Automated Quorum (2 of 3 signed)',
+      };
+
+      await addReport(newReportData);
+      await api.submitShoreScan({
+        sampleKey,
+        category,
+        confidence: '91.4%',
+        risk: 'Moderate Dragging Risk',
+        notes,
+        coordinates: '8.7052° S, 115.2625° E',
+      });
+
+      showToast('ShoreScan hazard dispatched to live shared dossiers!', 'rocket_launch');
+      setCurrentScreen('dossiers');
+    } catch (err: any) {
+      showToast(err.message || 'Failed dispatching report', 'error');
+    }
   };
 
-  const handleAddManualReport = (report: GearReport) => {
-    setReportsList((prev) => [report, ...prev]);
+  const handleAddManualReport = async (report: GearReport) => {
+    try {
+      await addReport(report);
+      showToast('Incident filed into shared dossiers!', 'task_alt');
+      setCurrentScreen('dossiers');
+    } catch (err: any) {
+      showToast(err.message || 'Failed saving report', 'error');
+    }
   };
 
   const renderActiveScreen = () => {
@@ -123,7 +144,7 @@ export default function App() {
           <DossiersScreen
             onNavigate={setCurrentScreen}
             showToast={showToast}
-            reportsList={reportsList}
+            reportsList={reports}
           />
         );
       case 'community-feed':
@@ -151,6 +172,9 @@ export default function App() {
       {/* Toast Notification Banner */}
       <Toast toast={toast} onDismiss={() => setToast(null)} />
 
+      {/* Authentication & Profile Modal */}
+      <AuthModal />
+
       {/* Quick Screens Switchboard Modal */}
       <QuickNavigatorModal
         isOpen={isQuickNavigatorOpen}
@@ -167,9 +191,18 @@ export default function App() {
       />
 
       {/* Screen Quick Launcher Strip on Top */}
-      <div className="bg-[#002531] text-white text-[11px] py-1.5 px-3 flex items-center justify-between border-b border-white/10 z-50">
+      <div className="bg-[#002531] text-white text-[11px] py-1.5 px-3 flex items-center justify-between border-b border-white/10 z-40">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-          <span className="text-[#90f4e9] font-bold shrink-0">11 Screens:</span>
+          <div className="flex items-center gap-1 shrink-0 mr-1">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isRealtimeConnected ? 'bg-[#90f4e9] animate-pulse' : 'bg-amber-400'
+              }`}
+              title={isRealtimeConnected ? 'Live Multi-User SSE Connected' : 'Connecting to live database'}
+            />
+            <span className="text-[#90f4e9] font-bold">Tidekind:</span>
+          </div>
+
           {[
             { id: 'welcome', label: '01 Onboarding' },
             { id: 'home', label: '02 Home' },
@@ -198,13 +231,34 @@ export default function App() {
           ))}
         </div>
 
-        <button
-          onClick={() => setIsQuickNavigatorOpen(true)}
-          className="shrink-0 ml-2 px-2.5 py-0.5 rounded-full bg-[#90f4e9] text-[#001f29] font-bold text-[10px] hover:bg-[#73d7cd] flex items-center gap-1"
-        >
-          <span className="material-symbols-outlined text-[13px]">dashboard</span>
-          <span>Switchboard</span>
-        </button>
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          {user ? (
+            <button
+              onClick={() => setCurrentScreen('profile')}
+              className="px-2 py-0.5 rounded-full bg-[#006a63] text-[#90f4e9] font-semibold text-[10px] hover:bg-[#00504a] flex items-center gap-1"
+              title={`Logged in as ${user.name}`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#90f4e9]"></span>
+              <span className="max-w-[80px] truncate">{user.name.split(' ')[0]}</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="px-2.5 py-0.5 rounded-full bg-[#90f4e9] text-[#001f29] font-bold text-[10px] hover:bg-[#73d7cd] flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[12px]">login</span>
+              <span>Sign In</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsQuickNavigatorOpen(true)}
+            className="px-2 py-0.5 rounded-full bg-white/10 text-white/90 font-medium text-[10px] hover:bg-white/20 flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-[12px]">dashboard</span>
+            <span>All</span>
+          </button>
+        </div>
       </div>
 
       {/* Frame wrapper if toggled, or fluid full-width container */}
@@ -237,5 +291,13 @@ export default function App() {
         />
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

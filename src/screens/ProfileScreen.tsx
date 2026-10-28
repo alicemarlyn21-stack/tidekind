@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ASSETS } from '../data/assets';
-import { ScreenId } from '../types';
+import { ScreenId, User } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ProfileScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -8,363 +9,337 @@ interface ProfileScreenProps {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showToast }) => {
+  const {
+    user,
+    logout,
+    updateProfile,
+    logActivity,
+    switchDemoAccount,
+    setAuthModalOpen,
+    setAuthMode,
+    activityLogs,
+  } = useAuth();
+
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isPassModalOpen, setIsPassModalOpen] = useState(false);
+
+  // Settings Toggles
   const [tideAlerts, setTideAlerts] = useState(true);
   const [salvageCalls, setSalvageCalls] = useState(true);
   const [fuzzyGps, setFuzzyGps] = useState(true);
 
+  // Log Form State
+  const [logCategory, setLogCategory] = useState('Net Recovery');
   const [logWeight, setLogWeight] = useState('24');
+  const [logHours, setLogHours] = useState('3.5');
   const [logLocation, setLogLocation] = useState('Serangan Harbor Dock #4');
+  const [verificationMethod, setVerificationMethod] = useState('Co-op Scale Station #3');
+  const [isSubmittingLog, setIsSubmittingLog] = useState(false);
+
+  // Edit Profile Form State
+  const [editName, setEditName] = useState(user?.name || '');
+  const [editBio, setEditBio] = useState(user?.bio || '');
+  const [editLocation, setEditLocation] = useState(user?.location || '');
+  const [editChapter, setEditChapter] = useState(user?.chapter || '');
+  const [editAvatar, setEditAvatar] = useState(user?.avatar || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Sync edit form with current user
+  React.useEffect(() => {
+    if (user) {
+      setEditName(user.name);
+      setEditBio(user.bio);
+      setEditLocation(user.location);
+      setEditChapter(user.chapter);
+      setEditAvatar(user.avatar);
+    }
+  }, [user]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim()) {
+      showToast('Name cannot be empty', 'error');
+      return;
+    }
+    setIsSavingProfile(true);
+    try {
+      await updateProfile({
+        name: editName.trim(),
+        bio: editBio.trim(),
+        location: editLocation.trim(),
+        chapter: editChapter.trim(),
+        avatar: editAvatar.trim(),
+      });
+      setIsEditProfileOpen(false);
+      showToast('Steward profile updated successfully!', 'badge');
+    } catch (err: any) {
+      showToast(err.message || 'Failed updating profile', 'error');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleSubmitLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingLog(true);
+    try {
+      await logActivity({
+        category: logCategory,
+        weightKg: Number(logWeight) || 0,
+        hours: Number(logHours) || 1,
+        location: logLocation,
+        verificationMethod,
+      });
+      setIsLogModalOpen(false);
+      showToast(`Logged ${logWeight} kg at ${logLocation}! Personal impact updated.`, 'task_alt');
+    } catch (err: any) {
+      showToast(err.message || 'Failed saving salvage log', 'error');
+    } finally {
+      setIsSubmittingLog(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    showToast('Signed out of steward account', 'logout');
+  };
+
+  const handleQuickSwitch = async (email: string) => {
+    try {
+      await switchDemoAccount(email);
+      showToast(`Switched account!`, 'sync');
+    } catch (err: any) {
+      showToast(err.message || 'Failed switching account', 'error');
+    }
+  };
+
+  const userLogs = activityLogs.filter((l) => l.userId === user?.id);
 
   return (
     <div className="flex flex-col w-full pb-28 pt-2 max-w-lg mx-auto px-4 space-y-4">
-      {/* Top Profile Card */}
-      <div className="relative overflow-hidden rounded-3xl bg-white p-5 shadow-sm border border-[#e8eff7]">
-        {/* Decorative Ambient Glow */}
-        <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#90f4e9]/30 blur-2xl pointer-events-none"></div>
-
-        {/* Avatar & Identity */}
-        <div className="relative flex items-center gap-4">
-          <div className="relative shrink-0">
-            <img
-              src={ASSETS.alexSteward}
-              alt="Alex Steward"
-              className="h-20 w-20 rounded-full object-cover shadow-sm ring-2 ring-[#006a63]/40"
-            />
-            <div
-              className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#006a63] text-white shadow-md ring-2 ring-white"
-              title="Verified Tier 2 Steward"
-            >
-              <span className="material-symbols-outlined text-[14px]">verified</span>
-            </div>
+      {/* If Not Authenticated Banner */}
+      {!user ? (
+        <div className="rounded-3xl bg-[#eef4fc] p-6 text-center border border-[#dce3eb] shadow-sm space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-full bg-[#90f4e9] text-[#006a63] flex items-center justify-center">
+            <span className="material-symbols-outlined text-3xl">account_circle</span>
           </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h1 className="text-lg font-bold text-[#151c22] truncate">Alex Steward</h1>
-              <span className="px-2 py-0.5 rounded-full bg-[#90f4e9] text-[#00504a] text-[10px] font-bold">
-                Tier 2 Steward
-              </span>
-            </div>
-            <p className="text-xs text-[#41484b] flex items-center gap-1 mt-0.5 truncate">
-              <span className="material-symbols-outlined text-sm text-[#006a63]">anchor</span>
-              <span>Serangan Harbor Chapter</span>
-            </p>
-            <p className="text-xs text-[#72787c] flex items-center gap-1 mt-0.5">
-              <span className="material-symbols-outlined text-sm">location_on</span>
-              <span>Denpasar, Bali</span>
+          <div>
+            <h2 className="text-lg font-bold text-[#151c22]">Guest Oceanic Steward</h2>
+            <p className="text-xs text-[#41484b] mt-1">
+              Sign in or create an account to record verified ghost gear salvage, join harbor sorties, and personalize your steward credentials.
             </p>
           </div>
-        </div>
-
-        {/* Verified Contribution Stats */}
-        <div className="mt-4 grid grid-cols-2 gap-2 pt-1">
-          <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#41484b] font-medium">Gear Diverted</span>
-              <span className="material-symbols-outlined text-[#006a63] text-base">recycling</span>
-            </div>
-            <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-xl font-bold text-[#002531]">340</span>
-              <span className="text-xs text-[#006a63] font-bold">kg</span>
-            </div>
-            <span className="text-[10px] text-[#006a63] font-semibold flex items-center gap-0.5 mt-0.5">
-              <span className="material-symbols-outlined text-xs">verified</span>
-              <span>Weight-certified</span>
-            </span>
-          </div>
-
-          <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#41484b] font-medium">Hours Logged</span>
-              <span className="material-symbols-outlined text-[#006a63] text-base">timer</span>
-            </div>
-            <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-xl font-bold text-[#002531]">18</span>
-              <span className="text-xs text-[#72787c]">hrs</span>
-            </div>
-            <span className="text-[10px] text-[#72787c] mt-0.5">Across 6 sorties</span>
-          </div>
-
-          <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#41484b] font-medium">Projects Done</span>
-              <span className="material-symbols-outlined text-[#006a63] text-base">task_alt</span>
-            </div>
-            <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-xl font-bold text-[#002531]">4</span>
-              <span className="text-xs text-[#006a63] font-bold">harbors</span>
-            </div>
-            <span className="text-[10px] text-[#72787c] mt-0.5">100% attendance</span>
-          </div>
-
-          <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[#41484b] font-medium">Gear Dossiers</span>
-              <span className="material-symbols-outlined text-[#006a63] text-base">
-                document_scanner
-              </span>
-            </div>
-            <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-xl font-bold text-[#002531]">3</span>
-              <span className="text-xs text-[#72787c]">verified</span>
-            </div>
-            <span className="text-[10px] text-[#006a63] font-semibold mt-0.5">
-              ShoreScan AI tagged
-            </span>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="mt-4 flex flex-col gap-2">
-          <button
-            onClick={() => setIsLogModalOpen(true)}
-            className="w-full h-11 rounded-full bg-[#006a63] hover:bg-[#123b4a] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
-          >
-            <span className="material-symbols-outlined text-lg">add_circle</span>
-            <span>Log New Contribution</span>
-          </button>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex gap-2 justify-center pt-1">
             <button
-              onClick={() => onNavigate('dossiers')}
-              className="h-10 rounded-full bg-[#e8eff7] hover:bg-[#dce3eb] text-[#002531] text-xs font-bold flex items-center justify-center gap-1 active:scale-95"
+              onClick={() => {
+                setAuthMode('login');
+                setAuthModalOpen(true);
+              }}
+              className="px-5 py-2.5 rounded-full bg-[#006a63] text-white text-xs font-bold shadow-md active:scale-95 transition-all"
             >
-              <span className="material-symbols-outlined text-sm text-[#006a63]">folder_shared</span>
-              <span>My Dossiers (3)</span>
+              Sign In
             </button>
             <button
-              onClick={() => showToast('Harbor profile settings ready to edit', 'tune')}
-              className="h-10 rounded-full bg-[#e8eff7] hover:bg-[#dce3eb] text-[#002531] text-xs font-bold flex items-center justify-center gap-1 active:scale-95"
+              onClick={() => {
+                setAuthMode('signup');
+                setAuthModalOpen(true);
+              }}
+              className="px-5 py-2.5 rounded-full bg-white text-[#006a63] border border-[#006a63]/40 text-xs font-bold hover:bg-[#e8eff7] active:scale-95 transition-all"
             >
-              <span className="material-symbols-outlined text-sm text-[#72787c]">tune</span>
-              <span>Edit Profile</span>
+              Create Account
             </button>
           </div>
         </div>
-      </div>
+      ) : (
+        /* Top Profile Card */
+        <div className="relative overflow-hidden rounded-3xl bg-white p-5 shadow-sm border border-[#e8eff7]">
+          {/* Decorative Ambient Glow */}
+          <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#90f4e9]/30 blur-2xl pointer-events-none"></div>
 
-      {/* Upcoming Activity Card */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#006a63] animate-ping"></span>
-            <h2 className="text-xs font-bold text-[#151c22]">Upcoming Activity</h2>
-          </div>
-          <span className="text-[11px] font-bold text-[#006a63]">Confirmed</span>
-        </div>
+          {/* Avatar & Identity */}
+          <div className="relative flex items-center gap-4">
+            <div className="relative shrink-0">
+              <img
+                src={user.avatar || ASSETS.userProfile}
+                alt={user.name}
+                className="h-20 w-20 rounded-full object-cover shadow-sm ring-2 ring-[#006a63]/40 bg-[#eef4fc]"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = ASSETS.userProfile;
+                }}
+              />
+              <div
+                className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#006a63] text-white shadow-md ring-2 ring-white"
+                title="Verified Active Steward"
+              >
+                <span className="material-symbols-outlined text-[14px]">verified</span>
+              </div>
+            </div>
 
-        <div className="p-4 sm:p-5 rounded-3xl bg-[#123b4a] text-white shadow-md relative overflow-hidden">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#90f4e9] text-[#00504a] text-[10px] font-bold mb-1">
-                Harbor Sort & Drop-off
-              </span>
-              <h3 className="text-base font-bold text-white">Kuta Harbor Net Sorting</h3>
-              <p className="text-xs text-[#7fa5b7] mt-0.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">calendar_today</span>
-                <span>Saturday, 08:00 WITA</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h1 className="text-lg font-bold text-[#151c22] truncate">{user.name}</h1>
+                <span className="px-2 py-0.5 rounded-full bg-[#90f4e9] text-[#00504a] text-[10px] font-bold">
+                  {user.badge || 'Steward'}
+                </span>
+              </div>
+              <p className="text-xs text-[#41484b] flex items-center gap-1 mt-0.5 truncate">
+                <span className="material-symbols-outlined text-sm text-[#006a63]">anchor</span>
+                <span>{user.chapter || 'Bali Coastal Chapter'}</span>
+              </p>
+              <p className="text-xs text-[#72787c] flex items-center gap-1 mt-0.5">
+                <span className="material-symbols-outlined text-sm">location_on</span>
+                <span>{user.location || 'Denpasar, Bali'}</span>
+              </p>
+              <p className="text-[11px] text-[#41484b] line-clamp-2 mt-1.5 italic font-sans leading-tight">
+                "{user.bio}"
               </p>
             </div>
-            <div className="rounded-2xl bg-white/10 backdrop-blur-md px-3 py-1.5 text-center shrink-0 border border-white/10">
-              <span className="block text-[9px] uppercase text-[#90f4e9] font-bold tracking-wider">
-                Berth
-              </span>
-              <span className="block text-xl font-bold text-white">#12</span>
-            </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
-            <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-full bg-[#006a63] flex items-center justify-center text-white shrink-0">
-                <span className="material-symbols-outlined text-xs">near_me</span>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white leading-tight">Muster Point Bravo</p>
-                <p className="text-[10px] text-[#7fa5b7]">Dry Dock Gantry Gate</p>
-              </div>
-            </div>
+          {/* Quick Edit Profile & QR Pass Row */}
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => setIsEditProfileOpen(true)}
+              className="flex-1 h-9 rounded-full bg-[#e8eff7] hover:bg-[#dce3eb] text-[#002531] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <span className="material-symbols-outlined text-base">edit</span>
+              <span>Edit Profile</span>
+            </button>
+
             <button
               onClick={() => setIsPassModalOpen(true)}
-              className="h-8 px-3.5 rounded-full bg-[#90f4e9] text-[#00201d] text-xs font-bold flex items-center gap-1 hover:bg-[#73d7cd] active:scale-95 transition-all shadow-xs"
+              className="flex-1 h-9 rounded-full bg-[#006a63] hover:bg-[#00504a] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors"
             >
-              <span className="material-symbols-outlined text-sm">qr_code_2</span>
-              <span>View Pass</span>
+              <span className="material-symbols-outlined text-base">qr_code_2</span>
+              <span>Harbor Pass</span>
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* Earned Badges Carousel */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xs font-bold text-[#151c22]">Earned Badges</h2>
-            <p className="text-[11px] text-[#72787c]">Validated skills & harbor certifications</p>
-          </div>
-          <span className="text-xs font-bold text-[#006a63]">3 Unlocked</span>
-        </div>
-
-        <div className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar">
-          {/* Badge 1 */}
-          <div className="shrink-0 w-36 rounded-2xl bg-white p-3 shadow-xs border border-[#e8eff7] flex flex-col items-center text-center">
-            <div className="h-10 w-10 rounded-full bg-[#90f4e9] flex items-center justify-center text-[#006a63] mb-1.5">
-              <span className="material-symbols-outlined text-xl">waves</span>
-            </div>
-            <h4 className="text-xs font-bold text-[#151c22]">Tidekeeper Lvl 1</h4>
-            <p className="text-[10px] text-[#72787c] mt-0.5 line-clamp-2">
-              Awarded for 300+ kg ghost gear diversion
-            </p>
-            <span className="mt-2 text-[10px] text-[#006a63] font-bold flex items-center gap-0.5">
-              <span className="material-symbols-outlined text-xs">military_tech</span> Verified
-            </span>
-          </div>
-
-          {/* Badge 2 */}
-          <div className="shrink-0 w-36 rounded-2xl bg-white p-3 shadow-xs border border-[#e8eff7] flex flex-col items-center text-center">
-            <div className="h-10 w-10 rounded-full bg-[#c2e8fb] flex items-center justify-center text-[#002531] mb-1.5">
-              <span className="material-symbols-outlined text-xl">hardware</span>
-            </div>
-            <h4 className="text-xs font-bold text-[#151c22]">Master Knot Untangler</h4>
-            <p className="text-[10px] text-[#72787c] mt-0.5 line-clamp-2">
-              Lead deck hand for entangled nylon rigs
-            </p>
-            <span className="mt-2 text-[10px] text-[#006a63] font-bold flex items-center gap-0.5">
-              <span className="material-symbols-outlined text-xs">military_tech</span> Certified
-            </span>
-          </div>
-
-          {/* Badge 3 */}
-          <div className="shrink-0 w-36 rounded-2xl bg-white p-3 shadow-xs border border-[#e8eff7] flex flex-col items-center text-center">
-            <div className="h-10 w-10 rounded-full bg-[#90f4e9]/50 flex items-center justify-center text-[#006a63] mb-1.5">
-              <span className="material-symbols-outlined text-xl">photo_camera</span>
-            </div>
-            <h4 className="text-xs font-bold text-[#151c22]">ShoreScan Pioneer</h4>
-            <p className="text-[10px] text-[#72787c] mt-0.5 line-clamp-2">
-              First 3 micro-plastic & drift net detections
-            </p>
-            <span className="mt-2 text-[10px] text-[#006a63] font-bold flex items-center gap-0.5">
-              <span className="material-symbols-outlined text-xs">military_tech</span> Pioneer
-            </span>
-          </div>
-
-          {/* Badge 4 (Locked) */}
-          <div className="shrink-0 w-36 rounded-2xl bg-[#eef4fc]/60 p-3 border border-dashed border-[#dce3eb] flex flex-col items-center text-center opacity-70">
-            <div className="h-10 w-10 rounded-full bg-[#dce3eb] flex items-center justify-center text-[#72787c] mb-1.5">
-              <span className="material-symbols-outlined text-xl">sailing</span>
-            </div>
-            <h4 className="text-xs font-bold text-[#151c22]">Deep Reef Diver</h4>
-            <p className="text-[10px] text-[#72787c] mt-0.5">2 more deep sorties needed</p>
-            <span className="mt-2 text-[10px] text-[#72787c] flex items-center gap-0.5">
-              <span className="material-symbols-outlined text-xs">lock</span> Locked
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Contribution History */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xs font-bold text-[#151c22]">Contribution History</h2>
-            <p className="text-[11px] text-[#72787c]">Validated chain of salvage logs</p>
-          </div>
-          <button
-            onClick={() => showToast('Exporting certified CSV ledger...', 'download')}
-            className="text-xs text-[#006a63] font-bold hover:underline"
-          >
-            Export Log
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {/* History 1 */}
-          <div className="rounded-2xl bg-white p-3.5 shadow-xs border border-[#e8eff7]">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-full bg-[#90f4e9]/40 flex items-center justify-center text-[#006a63] shrink-0">
-                  <span className="material-symbols-outlined text-base">scale</span>
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#151c22]">45 kg Monofilament Gillnet</h4>
-                  <p className="text-[11px] text-[#72787c]">Jimbaran Drive • May 14</p>
-                </div>
+          {/* Verified Contribution Stats */}
+          <div className="mt-4 grid grid-cols-2 gap-2 pt-1">
+            <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-[#41484b] font-medium">Gear Diverted</span>
+                <span className="material-symbols-outlined text-[#006a63] text-base">recycling</span>
               </div>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#90f4e9] text-[#00504a] text-[10px] font-bold">
-                <span className="material-symbols-outlined text-[12px]">verified</span>
-                <span>Verified</span>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-xl font-bold text-[#002531]">
+                  {user.stats?.gearDivertedKg || 0}
+                </span>
+                <span className="text-xs text-[#006a63] font-bold">kg</span>
+              </div>
+              <span className="text-[10px] text-[#006a63] font-semibold flex items-center gap-0.5 mt-0.5">
+                <span className="material-symbols-outlined text-xs">verified</span>
+                <span>Weight-certified</span>
               </span>
             </div>
-            <div className="mt-2.5 flex items-center justify-between rounded-xl bg-[#f6faff] px-2.5 py-1 text-[11px] border border-[#e8eff7]">
-              <span className="text-[#41484b]">Audited by Serangan Co-op</span>
-              <span className="font-mono text-[#002531] font-bold">Chain ID #7721</span>
-            </div>
-          </div>
 
-          {/* History 2 */}
-          <div className="rounded-2xl bg-white p-3.5 shadow-xs border border-[#e8eff7]">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-full bg-[#c2e8fb]/60 flex items-center justify-center text-[#001f29] shrink-0">
-                  <span className="material-symbols-outlined text-base">volunteer_activism</span>
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#151c22]">
-                    4 Hrs Beach Triage & Spooling
-                  </h4>
-                  <p className="text-[11px] text-[#72787c]">Sanur Reef Clean • May 02</p>
-                </div>
+            <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-[#41484b] font-medium">Hours Logged</span>
+                <span className="material-symbols-outlined text-[#006a63] text-base">timer</span>
               </div>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#90f4e9] text-[#00504a] text-[10px] font-bold">
-                <span className="material-symbols-outlined text-[12px]">verified</span>
-                <span>Verified</span>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-xl font-bold text-[#002531]">
+                  {user.stats?.hoursLogged || 0}
+                </span>
+                <span className="text-xs text-[#72787c]">hrs</span>
+              </div>
+              <span className="text-[10px] text-[#72787c] mt-0.5">
+                Across {user.stats?.sortiesCount || 0} sorties
               </span>
             </div>
-            <div className="mt-2.5 flex items-center justify-between rounded-xl bg-[#f6faff] px-2.5 py-1 text-[11px] border border-[#e8eff7]">
-              <span className="text-[#41484b]">Validated by Field Lead Wayan</span>
-              <span className="font-mono text-[#002531] font-bold">12 volunteers total</span>
-            </div>
-          </div>
 
-          {/* History 3 */}
-          <div className="rounded-2xl bg-white p-3.5 shadow-xs border border-[#e8eff7]">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-full bg-[#ffdbd1] flex items-center justify-center text-[#64200d] shrink-0">
-                  <span className="material-symbols-outlined text-base">radar</span>
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#151c22]">ShoreScan #SS-2025-042</h4>
-                  <p className="text-[11px] text-[#72787c]">Serangan Outer Reef • Today 10:14</p>
-                </div>
+            <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-[#41484b] font-medium">Projects Done</span>
+                <span className="material-symbols-outlined text-[#006a63] text-base">task_alt</span>
               </div>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#ffdad6] text-[#ba1a1a] text-[10px] font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#ba1a1a] animate-pulse"></span>
-                <span>Under Review</span>
-              </span>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-xl font-bold text-[#002531]">
+                  {user.stats?.projectsDone || 0}
+                </span>
+                <span className="text-xs text-[#006a63] font-bold">actions</span>
+              </div>
+              <span className="text-[10px] text-[#72787c] mt-0.5">Verified attendance</span>
             </div>
-            <div className="mt-2.5 flex items-center justify-between rounded-xl bg-[#f6faff] px-2.5 py-1 text-[11px] border border-[#e8eff7]">
-              <span className="text-[#41484b]">Pending Quorum (2 of 3 signed)</span>
-              <span className="font-semibold text-[#006a63]">Live Triage</span>
+
+            <div className="rounded-2xl bg-[#f6faff] p-3 flex flex-col justify-between border border-[#e8eff7]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-[#41484b] font-medium">Account Role</span>
+                <span className="material-symbols-outlined text-[#006a63] text-base">military_tech</span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-base font-bold text-[#002531]">{user.role}</span>
+              </div>
+              <span className="text-[10px] text-[#006a63] font-semibold mt-0.5">
+                {user.email}
+              </span>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Preferences & Field Safety */}
-      <div className="space-y-2">
-        <h2 className="text-xs font-bold text-[#151c22]">Preferences & Field Safety</h2>
-        <div className="rounded-3xl bg-white p-4 shadow-xs border border-[#e8eff7] space-y-3">
+      {/* Action Strip: Log Activity */}
+      {user && (
+        <button
+          onClick={() => setIsLogModalOpen(true)}
+          className="w-full h-12 rounded-2xl bg-[#002531] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md hover:bg-[#123b4a] active:scale-98 transition-all"
+        >
+          <span className="material-symbols-outlined text-lg text-[#90f4e9]">add_circle</span>
+          <span>Record New Gear Salvage or Volunteer Hours</span>
+        </button>
+      )}
+
+      {/* Recent Personal Logs */}
+      {user && userLogs.length > 0 && (
+        <div className="rounded-3xl bg-white p-5 shadow-sm border border-[#e8eff7] space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-[#151c22]">Your Recorded Sorties</h3>
+            <span className="text-xs text-[#72787c]">{userLogs.length} entries</span>
+          </div>
+
+          <div className="space-y-2">
+            {userLogs.map((log) => (
+              <div
+                key={log.id}
+                className="p-3 rounded-2xl bg-[#f6faff] border border-[#e8eff7] flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[#90f4e9]/50 text-[#006a63] flex items-center justify-center">
+                    <span className="material-symbols-outlined text-base">
+                      {log.category.includes('Mending') ? 'carpenter' : 'scale'}
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#151c22]">{log.category}</h4>
+                    <p className="text-[10px] text-[#72787c]">{log.location} • {log.date}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-bold text-[#002531]">+{log.weightKg} kg</span>
+                  <p className="text-[10px] text-[#006a63] font-semibold">{log.hours} hrs</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Settings & Preferences Section */}
+      <div className="rounded-3xl bg-white p-5 shadow-sm border border-[#e8eff7] space-y-4">
+        <h3 className="text-sm font-bold text-[#151c22]">Steward Vessel & Operational Settings</h3>
+
+        <div className="space-y-3">
           {/* Toggle 1 */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
-              <span className="material-symbols-outlined text-[#006a63] mt-0.5 text-lg">
-                tsunami
-              </span>
+              <span className="material-symbols-outlined text-[#006a63] mt-0.5 text-lg">water_drop</span>
               <div>
-                <h4 className="text-xs font-bold text-[#151c22]">Tide & Drift Net Alerts</h4>
+                <h4 className="text-xs font-bold text-[#151c22]">Tide & Weather Alerts</h4>
                 <p className="text-[11px] text-[#72787c]">
-                  Receive notification when currents push ghost rigs into Serangan
+                  Receive notifications 1 hour before optimal low tide survey windows
                 </p>
               </div>
             </div>
@@ -374,7 +349,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
                 checked={tideAlerts}
                 onChange={(e) => {
                   setTideAlerts(e.target.checked);
-                  showToast(e.target.checked ? 'Tide alerts enabled' : 'Tide alerts muted');
+                  showToast(e.target.checked ? 'Tide alerts active' : 'Tide alerts muted');
                 }}
                 className="sr-only peer"
               />
@@ -387,13 +362,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
           {/* Toggle 2 */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
-              <span className="material-symbols-outlined text-[#006a63] mt-0.5 text-lg">
-                scuba_diving
-              </span>
+              <span className="material-symbols-outlined text-[#006a63] mt-0.5 text-lg">radar</span>
               <div>
-                <h4 className="text-xs font-bold text-[#151c22]">Urgent Dive Salvage Calls</h4>
+                <h4 className="text-xs font-bold text-[#151c22]">Emergency Snag Dispatch</h4>
                 <p className="text-[11px] text-[#72787c]">
-                  Priority dispatch ping when mammal entanglement is reported nearby
+                  Allow local dive teams to notify your station for urgent ghost gear towing
                 </p>
               </div>
             </div>
@@ -416,9 +389,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
           {/* Toggle 3 */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
-              <span className="material-symbols-outlined text-[#006a63] mt-0.5 text-lg">
-                share_location
-              </span>
+              <span className="material-symbols-outlined text-[#006a63] mt-0.5 text-lg">share_location</span>
               <div>
                 <h4 className="text-xs font-bold text-[#151c22]">Fuzzy GPS Privacy</h4>
                 <p className="text-[11px] text-[#72787c]">
@@ -432,11 +403,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
                 checked={fuzzyGps}
                 onChange={(e) => {
                   setFuzzyGps(e.target.checked);
-                  showToast(
-                    e.target.checked
-                      ? 'Fuzzy GPS enabled (500m jitter)'
-                      : 'Precise GPS broadcasted'
-                  );
+                  showToast(e.target.checked ? 'Fuzzy GPS enabled (500m jitter)' : 'Precise GPS broadcasted');
                 }}
                 className="sr-only peer"
               />
@@ -446,22 +413,197 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
         </div>
       </div>
 
-      {/* Sign Out / Protocol ID */}
-      <div className="pt-2 flex flex-col items-center">
-        <button
-          onClick={() => showToast('Switched to guest vessel mode', 'logout')}
-          className="w-full h-11 rounded-full bg-[#e8eff7] hover:bg-[#ffdad6] text-[#002531] hover:text-[#ba1a1a] text-xs font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
-        >
-          <span className="material-symbols-outlined text-base">logout</span>
-          <span>Sign Out & Switch Vessel ID</span>
-        </button>
-        <p className="mt-2 text-[10px] text-[#72787c] text-center">
-          Tidekind Marine Network Protocol • v2.4-Bali • ID: TK-BLI-88930
+      {/* Multi-User Persona Switcher (For Evaluation & Multi-user verification) */}
+      <div className="rounded-3xl bg-white p-5 shadow-sm border border-[#e8eff7] space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-[#151c22]">Multi-User Test Switchboard</h3>
+          <span className="text-[10px] font-bold text-[#006a63] bg-[#90f4e9]/40 px-2 py-0.5 rounded-full">
+            Live Testing
+          </span>
+        </div>
+        <p className="text-xs text-[#72787c]">
+          Switch between distinct accounts in seconds to test concurrent collaboration, project memberships, and isolated private credentials:
         </p>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={() => handleQuickSwitch('alex@tidekind.org')}
+            className={`p-2.5 rounded-2xl border flex flex-col items-center text-center transition-all ${
+              user?.email === 'alex@tidekind.org'
+                ? 'bg-[#eef4fc] border-[#006a63] ring-2 ring-[#006a63]/30'
+                : 'bg-[#f6faff] border-[#dce3eb] hover:bg-[#eef4fc]'
+            }`}
+          >
+            <img src={ASSETS.alexSteward} alt="Alex" className="w-9 h-9 rounded-full object-cover mb-1" />
+            <span className="text-[11px] font-bold text-[#151c22]">Alex Stewart</span>
+            <span className="text-[9px] text-[#006a63] font-semibold">Tier 2 Steward</span>
+          </button>
+
+          <button
+            onClick={() => handleQuickSwitch('budi@tidekind.org')}
+            className={`p-2.5 rounded-2xl border flex flex-col items-center text-center transition-all ${
+              user?.email === 'budi@tidekind.org'
+                ? 'bg-[#eef4fc] border-[#006a63] ring-2 ring-[#006a63]/30'
+                : 'bg-[#f6faff] border-[#dce3eb] hover:bg-[#eef4fc]'
+            }`}
+          >
+            <img src={ASSETS.pakBudiMending} alt="Budi" className="w-9 h-9 rounded-full object-cover mb-1" />
+            <span className="text-[11px] font-bold text-[#151c22]">Pak Budi</span>
+            <span className="text-[9px] text-[#006a63] font-semibold">Coordinator</span>
+          </button>
+
+          <button
+            onClick={() => handleQuickSwitch('sarah@tidekind.org')}
+            className={`p-2.5 rounded-2xl border flex flex-col items-center text-center transition-all ${
+              user?.email === 'sarah@tidekind.org'
+                ? 'bg-[#eef4fc] border-[#006a63] ring-2 ring-[#006a63]/30'
+                : 'bg-[#f6faff] border-[#dce3eb] hover:bg-[#eef4fc]'
+            }`}
+          >
+            <img src={ASSETS.sarahJenkins} alt="Sarah" className="w-9 h-9 rounded-full object-cover mb-1" />
+            <span className="text-[11px] font-bold text-[#151c22]">Dr. Sarah</span>
+            <span className="text-[9px] text-[#006a63] font-semibold">Admin / Lead</span>
+          </button>
+        </div>
+
+        <button
+          onClick={() => {
+            setAuthMode('signup');
+            setAuthModalOpen(true);
+          }}
+          className="w-full py-2 rounded-xl bg-[#f6faff] hover:bg-[#e8eff7] text-[#006a63] text-xs font-bold border border-dashed border-[#006a63]/40 flex items-center justify-center gap-1.5 transition-colors"
+        >
+          <span className="material-symbols-outlined text-base">person_add</span>
+          <span>Register a Brand New Account</span>
+        </button>
       </div>
 
+      {/* Sign Out Button */}
+      {user && (
+        <div className="pt-2 flex flex-col items-center">
+          <button
+            onClick={handleLogout}
+            className="w-full h-11 rounded-full bg-[#ffdad6] hover:bg-[#ffb5a1] text-[#93000a] text-xs font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xs"
+          >
+            <span className="material-symbols-outlined text-base">logout</span>
+            <span>Sign Out of {user.name}</span>
+          </button>
+          <p className="mt-2 text-[10px] text-[#72787c] text-center">
+            Tidekind Marine Network Protocol • v2.4-Bali • ID: {user.id}
+          </p>
+        </div>
+      )}
+
+      {/* Modal: Edit Profile */}
+      {isEditProfileOpen && user && (
+        <div className="fixed inset-0 z-50 bg-[#002531]/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl p-5 shadow-2xl border border-[#dce3eb] space-y-4 max-h-[85vh] overflow-y-auto no-scrollbar">
+            <div className="flex items-center justify-between border-b pb-2.5 border-[#e8eff7]">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#006a63]">edit_square</span>
+                <h3 className="text-sm font-bold text-[#151c22]">Edit Steward Profile</h3>
+              </div>
+              <button
+                onClick={() => setIsEditProfileOpen(false)}
+                className="w-8 h-8 rounded-full bg-[#e8eff7] flex items-center justify-center text-[#41484b]"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-bold text-[#41484b] block mb-1">Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-semibold border border-[#dce3eb]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-[#41484b] block mb-1">Profile Avatar URL</label>
+                <input
+                  type="url"
+                  value={editAvatar}
+                  onChange={(e) => setEditAvatar(e.target.value)}
+                  className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-mono border border-[#dce3eb]"
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] text-[#72787c] font-semibold">Preset avatars:</span>
+                  {[
+                    { label: 'Steward 1', url: ASSETS.alexSteward },
+                    { label: 'Rigger', url: ASSETS.pakBudiMending },
+                    { label: 'Scientist', url: ASSETS.sarahJenkins },
+                    { label: 'Robot/Bot', url: `https://api.dicebear.com/7.x/bottts/svg?seed=${user.id}` },
+                  ].map((p, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setEditAvatar(p.url)}
+                      className="text-[10px] px-2 py-0.5 rounded-full bg-[#e8eff7] text-[#002531] hover:bg-[#90f4e9]"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-[#41484b] block mb-1">Berth / Location</label>
+                  <input
+                    type="text"
+                    value={editLocation}
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs border border-[#dce3eb]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#41484b] block mb-1">Chapter</label>
+                  <input
+                    type="text"
+                    value={editChapter}
+                    onChange={(e) => setEditChapter(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs border border-[#dce3eb]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-[#41484b] block mb-1">Personal Bio</label>
+                <textarea
+                  rows={3}
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  className="w-full p-3 rounded-2xl bg-[#f6faff] text-xs border border-[#dce3eb]"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditProfileOpen(false)}
+                  className="flex-1 h-11 rounded-full bg-[#e8eff7] text-[#002531] text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="flex-1 h-11 rounded-full bg-[#006a63] text-white text-xs font-bold shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isSavingProfile ? 'Saving...' : 'Save Profile Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal: View Muster Pass */}
-      {isPassModalOpen && (
+      {isPassModalOpen && user && (
         <div className="fixed inset-0 z-50 bg-[#002531]/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl text-center relative border border-[#dce3eb]">
             <button
@@ -475,16 +617,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
               Boarding & Staging Pass
             </span>
             <h3 className="text-base font-bold text-[#151c22]">Kuta Net Sort Berth #12</h3>
-            <p className="text-xs text-[#72787c] mt-0.5">Steward: Alex Steward (TK-BLI-88930)</p>
+            <p className="text-xs text-[#72787c] mt-0.5">
+              Steward: {user.name} ({user.id})
+            </p>
 
             {/* QR Code graphic */}
             <div className="my-4 mx-auto w-40 h-40 rounded-2xl bg-[#f6faff] p-3 flex flex-col items-center justify-center border border-dashed border-[#c1c7cb]">
-              <span className="material-symbols-outlined text-6xl text-[#002531] mb-1">
-                qr_code_2
-              </span>
-              <span className="text-[10px] font-mono text-[#72787c] font-bold">
-                SCAN AT DOCK GANTRY
-              </span>
+              <span className="material-symbols-outlined text-6xl text-[#002531] mb-1">qr_code_2</span>
+              <span className="text-[10px] font-mono text-[#72787c] font-bold">SCAN AT DOCK GANTRY</span>
             </div>
 
             <div className="rounded-2xl bg-[#123b4a] text-white p-3 text-left border border-white/10">
@@ -529,29 +669,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
               </button>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setIsLogModalOpen(false);
-                showToast(`Logged ${logWeight} kg net at ${logLocation}!`, 'task_alt');
-              }}
-              className="space-y-3"
-            >
+            <form onSubmit={handleSubmitLog} className="space-y-3">
               <div>
-                <label className="text-[11px] font-bold text-[#72787c] block mb-1">
-                  Activity Category
-                </label>
+                <label className="text-[11px] font-bold text-[#72787c] block mb-1">Activity Category</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    className="h-10 rounded-full bg-[#006a63] text-white text-xs font-bold flex items-center justify-center gap-1 shadow-xs"
+                    onClick={() => setLogCategory('Net Recovery')}
+                    className={`h-10 rounded-full text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-colors ${
+                      logCategory === 'Net Recovery'
+                        ? 'bg-[#006a63] text-white'
+                        : 'bg-[#e8eff7] text-[#002531]'
+                    }`}
                   >
                     <span className="material-symbols-outlined text-base">set_meal</span>
                     <span>Net Recovery</span>
                   </button>
                   <button
                     type="button"
-                    className="h-10 rounded-full bg-[#e8eff7] text-[#002531] text-xs font-bold flex items-center justify-center gap-1"
+                    onClick={() => setLogCategory('Volunteer Hours')}
+                    className={`h-10 rounded-full text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-colors ${
+                      logCategory === 'Volunteer Hours'
+                        ? 'bg-[#006a63] text-white'
+                        : 'bg-[#e8eff7] text-[#002531]'
+                    }`}
                   >
                     <span className="material-symbols-outlined text-base">hourglass_bottom</span>
                     <span>Volunteer Hours</span>
@@ -559,23 +700,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-[#72787c] block mb-1">
-                  Quantity / Net Mass (kg)
-                </label>
-                <input
-                  type="number"
-                  value={logWeight}
-                  onChange={(e) => setLogWeight(e.target.value)}
-                  className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-semibold border border-[#dce3eb]"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-[#72787c] block mb-1">Net Mass (kg)</label>
+                  <input
+                    type="number"
+                    value={logWeight}
+                    onChange={(e) => setLogWeight(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-semibold border border-[#dce3eb]"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#72787c] block mb-1">Hours Spent</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={logHours}
+                    onChange={(e) => setLogHours(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-semibold border border-[#dce3eb]"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#72787c] block mb-1">
-                  Muster / Harbor Location
-                </label>
+                <label className="text-[11px] font-bold text-[#72787c] block mb-1">Muster / Harbor Location</label>
                 <input
                   type="text"
                   value={logLocation}
@@ -586,16 +736,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-[#72787c] block mb-1">
-                  Verification Method
-                </label>
-                <div className="p-3 rounded-2xl bg-[#eef4fc] flex items-center justify-between text-xs border border-[#dce3eb]">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#006a63]">domain_verification</span>
-                    <span className="text-[#002531] font-semibold">Co-op Scale Station #3</span>
-                  </div>
-                  <span className="text-[10px] text-[#006a63] font-bold">Auto-Pair</span>
-                </div>
+                <label className="text-[11px] font-bold text-[#72787c] block mb-1">Verification Method</label>
+                <select
+                  value={verificationMethod}
+                  onChange={(e) => setVerificationMethod(e.target.value)}
+                  className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] text-xs font-semibold border border-[#dce3eb]"
+                >
+                  <option value="Co-op Scale Station #3">Co-op Scale Station #3</option>
+                  <option value="Harbor Gantry Scale #1">Harbor Gantry Scale #1</option>
+                  <option value="Visual Drone Estimate">Visual Drone Estimate</option>
+                  <option value="Depot Certified Weight Slip">Depot Certified Weight Slip</option>
+                </select>
               </div>
 
               <div className="pt-2 flex gap-2">
@@ -608,9 +759,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate, showTo
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 h-11 rounded-full bg-[#006a63] text-white text-xs font-bold shadow-md active:scale-95"
+                  disabled={isSubmittingLog}
+                  className="flex-1 h-11 rounded-full bg-[#006a63] text-white text-xs font-bold shadow-md active:scale-95 disabled:opacity-50"
                 >
-                  Submit Log
+                  {isSubmittingLog ? 'Recording...' : 'Submit Certified Log'}
                 </button>
               </div>
             </form>

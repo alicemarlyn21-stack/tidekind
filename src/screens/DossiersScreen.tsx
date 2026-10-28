@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ASSETS } from '../data/assets';
 import { INITIAL_REPORTS } from '../data/mockData';
 import { GearReport, ScreenId } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface DossiersScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -14,6 +15,7 @@ export const DossiersScreen: React.FC<DossiersScreenProps> = ({
   showToast,
   reportsList,
 }) => {
+  const { updateReportStatus, user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'review' | 'planned' | 'diverted'>('all');
   const [sector, setSector] = useState('all');
   const [search, setSearch] = useState('');
@@ -385,11 +387,17 @@ export const DossiersScreen: React.FC<DossiersScreenProps> = ({
 
             <div className="pt-2 flex gap-2">
               <button
-                onClick={() => {
+                onClick={async () => {
+                  const targetId = activeDossier.id;
                   setActiveDossier(null);
-                  showToast(`Incident #${activeDossier.id} validated with harbor authority`, 'task_alt');
+                  try {
+                    await updateReportStatus(targetId, 'Action Planned', 'Serangan Maritime Recovery Unit');
+                    showToast(`Incident #${targetId} verified! Status changed to Action Planned.`, 'task_alt');
+                  } catch (err: any) {
+                    showToast(err.message || 'Status update failed', 'error');
+                  }
                 }}
-                className="flex-1 py-3 rounded-full bg-[#006a63] text-white text-xs font-bold active:scale-95"
+                className="flex-1 py-3 rounded-full bg-[#006a63] text-white text-xs font-bold active:scale-95 transition-all shadow-xs"
               >
                 Approve Verification Quorum
               </button>

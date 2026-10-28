@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ASSETS } from '../data/assets';
 import { ScreenId } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface HomeScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -15,22 +16,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   isRegisteredKuta,
   onToggleRegisterKuta,
 }) => {
+  const { user, sharedData, setAuthModalOpen } = useAuth();
+
+  const totalDivertedKg = 1420 + (sharedData?.activityLogs?.reduce((acc, l) => acc + (l.weightKg || 0), 0) || 0);
+  const totalStewards = 340 + (sharedData?.users?.length || 3);
+  const totalProjects = sharedData?.projects?.length || 3;
+
   return (
     <div className="flex flex-col w-full pb-28 pt-2 max-w-lg mx-auto px-4 space-y-6">
       {/* Greeting Hero Box */}
       <section className="relative w-full rounded-2xl bg-[#eef4fc] p-5 shadow-sm overflow-hidden border border-[#dce3eb]">
         <div className="relative z-10 flex flex-col gap-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#90f4e9] text-[#00504a] w-fit shadow-xs">
-            <span className="material-symbols-outlined text-[14px]">anchor</span>
-            <span className="text-xs font-semibold">Demo Pilot — Bali Coastal Hub</span>
+          <div className="flex items-center justify-between">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#90f4e9] text-[#00504a] w-fit shadow-xs">
+              <span className="material-symbols-outlined text-[14px]">anchor</span>
+              <span className="text-xs font-semibold">{user?.chapter || 'Bali Coastal Steward Hub'}</span>
+            </div>
+
+            {!user && (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="text-[11px] font-bold text-[#006a63] bg-white px-2.5 py-1 rounded-full shadow-xs hover:bg-[#90f4e9]/30 transition-colors"
+              >
+                Sign In / Join
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col mt-1">
             <h1 className="text-2xl font-bold tracking-tight text-[#151c22]">
-              Good morning, Alex!
+              Good morning, {user ? user.name.split(' ')[0] : 'Steward'}!
             </h1>
             <p className="text-sm text-[#41484b] mt-0.5">
-              Ready to make a difference for our oceans today?
+              {user
+                ? `Logged in as ${user.name} • ${user.badge}`
+                : 'Ready to make a difference for our oceans today?'}
             </p>
           </div>
 
@@ -62,7 +82,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="w-8 h-8 rounded-full bg-[#90f4e9]/50 text-[#006a63] flex items-center justify-center mb-2">
               <span className="material-symbols-outlined text-lg">scale</span>
             </div>
-            <span className="text-2xl font-bold text-[#002531]">1,420 kg</span>
+            <span className="text-2xl font-bold text-[#002531]">{totalDivertedKg.toLocaleString()} kg</span>
             <span className="text-xs text-[#41484b] mt-0.5">Gear collected</span>
           </div>
 
@@ -80,8 +100,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="w-8 h-8 rounded-full bg-[#e2e9f1] text-[#006a63] flex items-center justify-center mb-2">
               <span className="material-symbols-outlined text-lg">task_alt</span>
             </div>
-            <span className="text-2xl font-bold text-[#002531]">18</span>
-            <span className="text-xs text-[#41484b] mt-0.5">Projects finished</span>
+            <span className="text-2xl font-bold text-[#002531]">{totalProjects}</span>
+            <span className="text-xs text-[#41484b] mt-0.5">Projects active</span>
           </div>
 
           {/* Metric 4 */}
@@ -89,7 +109,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="w-8 h-8 rounded-full bg-[#90f4e9] text-[#00201d] flex items-center justify-center mb-2">
               <span className="material-symbols-outlined text-lg">diversity_1</span>
             </div>
-            <span className="text-2xl font-bold text-[#002531]">340</span>
+            <span className="text-2xl font-bold text-[#002531]">{totalStewards}</span>
             <span className="text-xs text-[#41484b] mt-0.5">Active stewards</span>
           </div>
         </div>

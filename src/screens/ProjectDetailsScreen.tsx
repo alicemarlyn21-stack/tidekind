@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ASSETS } from '../data/assets';
 import { ScreenId } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ProjectDetailsScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -15,14 +16,40 @@ export const ProjectDetailsScreen: React.FC<ProjectDetailsScreenProps> = ({
   isRegistered,
   onToggleRegister,
 }) => {
+  const { user, projects, joinProject, leaveProject, setAuthModalOpen } = useAuth();
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [activeTab, setActiveTab] = useState<'kuta' | 'sanur'>('kuta');
 
-  const baseCount = 12;
-  const maxCapacity = 15;
-  const currentCount = isRegistered ? baseCount + 1 : baseCount;
-  const openBerths = maxCapacity - currentCount;
-  const pct = Math.round((currentCount / maxCapacity) * 100);
+  const projectId = activeTab === 'kuta' ? 'proj_kuta_01' : 'proj_sanur_02';
+  const currentProject = projects.find((p) => p.id === projectId) || projects[0];
+
+  const isUserJoined = Boolean(user && currentProject?.participants?.some((p) => p.userId === user.id));
+  const participantsList = currentProject?.participants || [];
+  const currentCount = 12 + participantsList.length;
+  const maxCapacity = currentProject?.maxParticipants || 15;
+  const openBerths = Math.max(0, maxCapacity - currentCount);
+  const pct = Math.min(100, Math.round((currentCount / maxCapacity) * 100));
+
+  const handleToggleJoin = async () => {
+    if (!user) {
+      setAuthModalOpen(true);
+      showToast('Please sign in or create an account to join projects', 'info');
+      return;
+    }
+
+    try {
+      if (isUserJoined) {
+        await leaveProject(currentProject.id);
+        showToast('Left project. Your berth has reopened.', 'info');
+      } else {
+        await joinProject(currentProject.id);
+        showToast('Registered for project! Gate pass generated.', 'task_alt');
+      }
+      onToggleRegister();
+    } catch (err: any) {
+      showToast(err.message || 'Operation failed', 'error');
+    }
+  };
 
   const handleCopyCoords = () => {
     navigator.clipboard?.writeText?.("8°44'51.2\"S 115°12'32.6\"E");
@@ -410,23 +437,17 @@ export const ProjectDetailsScreen: React.FC<ProjectDetailsScreenProps> = ({
           </div>
         </div>
         <button
-          onClick={() => {
-            onToggleRegister();
-            showToast(
-              isRegistered ? 'Registration cancelled. Berth reopened.' : 'Registered! Gate pass generated.',
-              isRegistered ? 'info' : 'task_alt'
-            );
-          }}
+          onClick={handleToggleJoin}
           className={`px-6 py-3 rounded-full text-xs sm:text-sm font-bold shadow-md active:scale-95 transition-all flex items-center gap-1.5 ${
-            isRegistered
+            isUserJoined
               ? 'bg-[#90f4e9] text-[#00201d]'
               : 'bg-[#006a63] hover:bg-[#123b4a] text-white'
           }`}
         >
           <span className="material-symbols-outlined text-lg">
-            {isRegistered ? 'done_all' : 'volunteer_activism'}
+            {isUserJoined ? 'done_all' : 'volunteer_activism'}
           </span>
-          <span>{isRegistered ? 'Joined ✓ (Leave)' : 'Join Project'}</span>
+          <span>{isUserJoined ? 'Joined ✓ (Leave)' : 'Join Project'}</span>
         </button>
       </div>
     </div>

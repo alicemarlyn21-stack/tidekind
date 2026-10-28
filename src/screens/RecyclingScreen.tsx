@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ASSETS } from '../data/assets';
 import { ScreenId } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface RecyclingScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -8,9 +9,20 @@ interface RecyclingScreenProps {
 }
 
 export const RecyclingScreen: React.FC<RecyclingScreenProps> = ({ onNavigate, showToast }) => {
+  const { user, listings, addListing, setAuthModalOpen } = useAuth();
   const [activeFilter, setActiveFilter] = useState<'repair' | 'collection' | 'recycling'>('repair');
   const [search, setSearch] = useState('');
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
+  const [isCreateListingOpen, setIsCreateListingOpen] = useState(false);
+
+  // New Listing Form State
+  const [listingTitle, setListingTitle] = useState('');
+  const [listingCategory, setListingCategory] = useState('Net Mending');
+  const [listingQty, setListingQty] = useState('80');
+  const [listingUnit, setListingUnit] = useState('meters');
+  const [listingCondition, setListingCondition] = useState('Washed & Desalted');
+  const [listingDescription, setListingDescription] = useState('Diverted oceanic gear ready for circular repurposing.');
+  const [isSubmittingListing, setIsSubmittingListing] = useState(false);
 
   return (
     <div className="flex flex-col w-full pb-28 pt-2 max-w-lg mx-auto px-4 space-y-4">
@@ -397,6 +409,64 @@ export const RecyclingScreen: React.FC<RecyclingScreenProps> = ({ onNavigate, sh
         )}
       </div>
 
+      {/* Live Shared Circular Listings */}
+      <div className="w-full bg-white rounded-3xl p-5 shadow-sm border border-[#e8eff7] space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#006a63]">inventory_2</span>
+            <h3 className="text-sm font-bold text-[#151c22]">Available Reclaimed Materials ({listings.length})</h3>
+          </div>
+          <button
+            onClick={() => {
+              if (!user) setAuthModalOpen(true);
+              else setIsCreateListingOpen(true);
+            }}
+            className="text-xs font-bold text-[#006a63] bg-[#90f4e9]/40 hover:bg-[#90f4e9] px-3 py-1 rounded-full transition-colors flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-sm">add</span>
+            <span>List Gear</span>
+          </button>
+        </div>
+
+        <div className="space-y-2.5">
+          {listings.map((l) => (
+            <div
+              key={l.id}
+              className="p-3.5 rounded-2xl bg-[#f6faff] border border-[#e8eff7] flex flex-col gap-2"
+            >
+              <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-full bg-[#c2e8fb] text-[#001f29] text-[10px] font-bold">
+                      {l.category}
+                    </span>
+                    <span className="text-xs font-bold text-[#151c22] truncate">{l.title}</span>
+                  </div>
+                  <p className="text-[11px] text-[#41484b] mt-1 line-clamp-2">{l.description}</p>
+                </div>
+                <div className="text-right shrink-0 ml-2">
+                  <span className="text-xs font-bold text-[#006a63]">{l.quantity} {l.unit}</span>
+                  <span className="block text-[10px] text-[#72787c]">{l.condition}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 border-t border-[#e8eff7] text-[10px] text-[#72787c]">
+                <div className="flex items-center gap-1.5">
+                  <img src={l.creatorAvatar || ASSETS.userProfile} alt={l.creatorName} className="w-4 h-4 rounded-full object-cover" />
+                  <span>{l.creatorName} • {l.location}</span>
+                </div>
+                <button
+                  onClick={() => showToast(`Inquiry sent to ${l.creatorName}`, 'mail')}
+                  className="px-2.5 py-0.5 rounded-full bg-[#006a63] text-white font-bold hover:bg-[#00504a]"
+                >
+                  Request Batch
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Rigger / Partner Callout */}
       <div className="w-full bg-[#eef4fc] rounded-3xl p-5 shadow-sm border border-[#dce3eb] flex flex-col items-center text-center gap-2">
         <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center text-[#006a63] shadow-xs">
@@ -409,13 +479,151 @@ export const RecyclingScreen: React.FC<RecyclingScreenProps> = ({ onNavigate, sh
           </p>
         </div>
         <button
-          onClick={() => showToast('Opening partner accreditation application', 'handshake')}
+          onClick={() => {
+            if (!user) setAuthModalOpen(true);
+            else setIsCreateListingOpen(true);
+          }}
           className="w-full h-11 rounded-full bg-[#002531] hover:bg-[#123b4a] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all mt-1"
         >
           <span className="material-symbols-outlined text-base">handshake</span>
           <span>Offer a Repair or Drop Service (Submit for Review)</span>
         </button>
       </div>
+
+      {/* Modal: Create Material Listing */}
+      {isCreateListingOpen && (
+        <div className="fixed inset-0 z-50 bg-[#002531]/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b pb-2 border-[#e8eff7]">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#006a63]">inventory_2</span>
+                <h3 className="text-sm font-bold text-[#151c22]">List Reclaimed Material</h3>
+              </div>
+              <button
+                onClick={() => setIsCreateListingOpen(false)}
+                className="w-8 h-8 rounded-full bg-[#e8eff7] flex items-center justify-center text-[#41484b]"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!listingTitle.trim()) return;
+                setIsSubmittingListing(true);
+                try {
+                  await addListing({
+                    title: listingTitle.trim(),
+                    category: listingCategory,
+                    quantity: Number(listingQty) || 50,
+                    unit: listingUnit,
+                    condition: listingCondition,
+                    description: listingDescription.trim(),
+                  });
+                  setIsCreateListingOpen(false);
+                  setListingTitle('');
+                  showToast('Circular material listed in live registry!', 'task_alt');
+                } catch (err: any) {
+                  showToast(err.message || 'Failed listing material', 'error');
+                } finally {
+                  setIsSubmittingListing(false);
+                }
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="font-bold text-[#002531] block mb-1">Listing Title</label>
+                <input
+                  type="text"
+                  required
+                  value={listingTitle}
+                  onChange={(e) => setListingTitle(e.target.value)}
+                  placeholder="e.g. Desalted Polypropylene Gillnet Cord"
+                  className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] border border-[#dce3eb]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-[#002531] block mb-1">Category</label>
+                  <select
+                    value={listingCategory}
+                    onChange={(e) => setListingCategory(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] border border-[#dce3eb]"
+                  >
+                    <option value="Net Mending">Net Mending</option>
+                    <option value="Polymer Pellets">Polymer Pellets</option>
+                    <option value="Buoy Rigging">Buoy Rigging</option>
+                    <option value="Lead Line">Lead Line</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-[#002531] block mb-1">Condition</label>
+                  <input
+                    type="text"
+                    value={listingCondition}
+                    onChange={(e) => setListingCondition(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] border border-[#dce3eb]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-[#002531] block mb-1">Quantity</label>
+                  <input
+                    type="number"
+                    value={listingQty}
+                    onChange={(e) => setListingQty(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] border border-[#dce3eb]"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-[#002531] block mb-1">Unit</label>
+                  <select
+                    value={listingUnit}
+                    onChange={(e) => setListingUnit(e.target.value)}
+                    className="w-full h-11 px-3 rounded-2xl bg-[#f6faff] border border-[#dce3eb]"
+                  >
+                    <option value="meters">meters</option>
+                    <option value="kg">kg</option>
+                    <option value="units">units</option>
+                    <option value="spools">spools</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-[#002531] block mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={listingDescription}
+                  onChange={(e) => setListingDescription(e.target.value)}
+                  className="w-full p-2.5 rounded-2xl bg-[#f6faff] border border-[#dce3eb]"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateListingOpen(false)}
+                  className="flex-1 h-11 rounded-full bg-[#e8eff7] text-[#002531] font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingListing}
+                  className="flex-1 h-11 rounded-full bg-[#006a63] text-white font-bold shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isSubmittingListing ? 'Publishing...' : 'Publish Listing'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Request Mending Slot Modal */}
       {isSlotModalOpen && (

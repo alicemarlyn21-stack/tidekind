@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScreenId } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ActionsScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -7,6 +8,7 @@ interface ActionsScreenProps {
 }
 
 export const ActionsScreen: React.FC<ActionsScreenProps> = ({ onNavigate, showToast }) => {
+  const { user, logActivity } = useAuth();
   const [activeFilter, setActiveFilter] = useState<'all' | 'volunteer' | 'fishers' | 'partners'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
@@ -16,9 +18,15 @@ export const ActionsScreen: React.FC<ActionsScreenProps> = ({ onNavigate, showTo
   const [logKg, setLogKg] = useState('18.5');
   const [logLocation, setLogLocation] = useState('Sanur Reef Outer Sector');
   const [proposalTitle, setProposalTitle] = useState('');
-  const [volunteerName, setVolunteerName] = useState('Alex Steward');
+  const [volunteerName, setVolunteerName] = useState(user?.name || 'Alex Steward');
   const [volunteerPhone, setVolunteerPhone] = useState('+62 812-9843-1102');
   const [partnerOrg, setPartnerOrg] = useState('');
+
+  useEffect(() => {
+    if (user?.name) {
+      setVolunteerName(user.name);
+    }
+  }, [user]);
 
   const filterButtons = [
     { id: 'all', label: 'All Actions' },

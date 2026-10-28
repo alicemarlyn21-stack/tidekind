@@ -19,6 +19,27 @@ export interface ToastMessage {
   type?: 'success' | 'info' | 'warning' | 'error';
 }
 
+export interface UserStats {
+  gearDivertedKg: number;
+  hoursLogged: number;
+  projectsDone: number;
+  sortiesCount: number;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  bio: string;
+  location: string;
+  chapter: string;
+  role: 'Steward' | 'Coordinator' | 'Admin';
+  badge: string;
+  stats: UserStats;
+  createdAt?: string;
+}
+
 export interface GearReport {
   id: string;
   gearType: string;
@@ -35,6 +56,8 @@ export interface GearReport {
   submittedAt: string;
   confidence?: string;
   assignedTeam?: string;
+  creatorId?: string;
+  creatorName?: string;
 }
 
 export interface ShoreScanSample {
@@ -53,4 +76,89 @@ export interface ShoreScanSample {
   temp: string;
   ram: string;
   exposure: string;
+}
+
+export interface ProjectParticipant {
+  userId: string;
+  name: string;
+  avatar: string;
+  role?: string;
+}
+
+export interface ActionProject {
+  id: string;
+  title: string;
+  location: string;
+  date: string;
+  meetingPoint: string;
+  targetTonnage: string;
+  maxParticipants: number;
+  description: string;
+  urgent: boolean;
+  status: string;
+  imageUrl: string;
+  participants: ProjectParticipant[];
+}
+
+export interface ResourceListing {
+  id: string;
+  title: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  condition: string;
+  location: string;
+  creatorId: string;
+  creatorName: string;
+  creatorAvatar: string;
+  status: string;
+  createdAt: string;
+  description: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  userName: string;
+  category: string;
+  weightKg: number;
+  hours: number;
+  location: string;
+  verificationMethod: string;
+  date: string;
+  timestamp: number;
+}
+
+export interface FeedComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface FeedPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  authorRole: string;
+  timeAgo: string;
+  location: string;
+  content: string;
+  imageUrl?: string | null;
+  likesCount: number;
+  likedBy: string[];
+  comments: FeedComment[];
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  icon: string;
+  read: boolean;
+  linkScreen?: ScreenId;
 }
